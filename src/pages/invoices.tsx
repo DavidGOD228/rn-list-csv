@@ -1,5 +1,11 @@
 import React, {useState} from 'react';
-import {ActivityIndicator, Text, TouchableOpacity, View} from 'react-native';
+import {
+  ActivityIndicator,
+  Platform,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import DocumentPicker, {
   DocumentPickerResponse,
 } from 'react-native-document-picker';
@@ -29,6 +35,24 @@ export const Invoices = () => {
       setSelectedDocument(null);
     }
   };
+
+  const copyToCacheDirectory = async (uri: string, fileName: string) => {
+    try {
+      const cachesDirectoryPath = RNFS.CachesDirectoryPath;
+
+      const newPath = `${cachesDirectoryPath}/${fileName}`;
+      if (await RNFS.exists(newPath)) {
+        await RNFS.unlink(newPath);
+      }
+      await RNFS.copyFile(uri, newPath);
+
+      return newPath;
+    } catch (err) {
+      console.error('Error copying file to cache directory', err);
+      throw err;
+    }
+  };
+
   const handleDocumentSelection = async () => {
     try {
       setIsLoading(true);
@@ -40,7 +64,11 @@ export const Invoices = () => {
       });
 
       setSelectedDocument(document);
-      const uri = document.uri;
+      const uri =
+        Platform.OS === 'android'
+          ? document.uri
+          : (document.fileCopyUri as string);
+
       const fileName = document.name as string;
       const isCsv = isCsvFile(fileName);
 
@@ -71,9 +99,7 @@ export const Invoices = () => {
   };
 
   const processCsv = async (uri: string, fileName: string) => {
-    const localFile = `${RNFS.CachesDirectoryPath}/${fileName}`;
-
-    await RNFS.copyFile(uri, localFile);
+    const localFile = await copyToCacheDirectory(uri, fileName);
 
     const csvString = await RNFS.readFile(localFile);
     const results = readString(csvString).data as string[];
